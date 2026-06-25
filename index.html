@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instant Mesh - Web Decimator</title>
+    <!-- Google Fonts: Inter and JetBrains Mono for CAD-like feel -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Main Style Sheet -->
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- Three.js Import Map for ES Modules -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body class="dark-theme">
+    <div class="app-container">
+        <!-- Sidebar Controls -->
+        <aside class="sidebar">
+            <header class="sidebar-header">
+                <div class="logo-container">
+                    <span class="logo-icon">▲</span>
+                    <div class="logo-text">
+                        <h1>INSTANT MESH</h1>
+                        <span class="logo-sub">WEB DECIMATOR</span>
+                    </div>
+                </div>
+                <div class="status-indicator">
+                    <span class="status-dot pulsing" id="wasm-status-dot"></span>
+                    <span class="status-text" id="wasm-status-text">WASM INITIALIZING...</span>
+                </div>
+            </header>
+
+            <div class="sidebar-content">
+                <!-- Step 1: Upload Area -->
+                <section class="card upload-section" id="upload-card">
+                    <div class="drop-zone" id="drop-zone">
+                        <div class="drop-zone-content">
+                            <svg class="upload-icon" viewBox="0 0 24 24" width="48" height="48">
+                                <path fill="currentColor" d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
+                            </svg>
+                            <h3>Import 3D Mesh & Textures</h3>
+                            <p>Drag & Drop <strong>.obj</strong> + <strong>texture files</strong> (.png, .jpg) here</p>
+                            <span class="or-divider">or</span>
+                            <label class="file-input-labelBtn">
+                                Browse Files
+                                <input type="file" id="file-input" accept=".obj,.png,.jpg,.jpeg" class="hidden-file-input" multiple>
+                            </label>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Step 2: Model Stats (Hidden by default) -->
+                <section class="card stats-section hidden" id="stats-card">
+                    <div class="card-header">
+                        <h2>Mesh Statistics</h2>
+                        <span class="badge" id="file-size-badge">0.0 MB</span>
+                    </div>
+                    <div class="file-meta">
+                        <span class="file-name" id="loaded-file-name">model.obj</span>
+                        <div class="textures-list" id="loaded-textures-list"></div>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <span class="stat-label">Original Faces</span>
+                            <span class="stat-value" id="stat-orig-faces">-</span>
+                        </div>
+                        <div class="stat-box highlight">
+                            <span class="stat-label">Target Faces</span>
+                            <span class="stat-value" id="stat-simp-faces">-</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-label">Original Verts</span>
+                            <span class="stat-value" id="stat-orig-verts">-</span>
+                        </div>
+                        <div class="stat-box highlight">
+                            <span class="stat-label">Target Verts</span>
+                            <span class="stat-value" id="stat-simp-verts">-</span>
+                        </div>
+                    </div>
+                    <div class="reduction-meter-container">
+                        <div class="reduction-label">
+                            <span>Reduction Ratio</span>
+                            <span class="reduction-value" id="reduction-percent">0%</span>
+                        </div>
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill" id="reduction-progress" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Step 3: Decimation Controls (Hidden by default) -->
+                <section class="card controls-section hidden" id="controls-card">
+                    <h2>Simplification Settings</h2>
+                    
+                    <!-- Decimation Slider -->
+                    <div class="control-group">
+                        <div class="slider-header">
+                            <label for="ratio-slider">Target Triangle Ratio</label>
+                            <span class="slider-bubble" id="ratio-value">50%</span>
+                        </div>
+                        <input type="range" id="ratio-slider" min="1" max="100" value="50" class="premium-slider">
+                        <div class="slider-ticks">
+                            <span>1%</span>
+                            <span>25%</span>
+                            <span>50%</span>
+                            <span>75%</span>
+                            <span>100%</span>
+                        </div>
+                    </div>
+
+                    <!-- View Options (Solid, Wire, Both) -->
+                    <div class="control-group">
+                        <label>Display Mode</label>
+                        <div class="segmented-control">
+                            <input type="radio" id="view-solid" name="view-mode" value="solid" checked>
+                            <label for="view-solid">Solid</label>
+                            
+                            <input type="radio" id="view-both" name="view-mode" value="both">
+                            <label for="view-both">Overlay</label>
+                            
+                            <input type="radio" id="view-wire" name="view-mode" value="wire">
+                            <label for="view-wire">Wireframe</label>
+                        </div>
+                    </div>
+
+                    <!-- Shading Style (Flat vs Smooth) -->
+                    <div class="control-group">
+                        <label>Shading Mode</label>
+                        <div class="segmented-control">
+                            <input type="radio" id="shade-smooth" name="shade-mode" value="smooth" checked>
+                            <label for="shade-smooth">Smooth</label>
+                            
+                            <input type="radio" id="shade-flat" name="shade-mode" value="flat">
+                            <label for="shade-flat">Flat Shading</label>
+                        </div>
+                    </div>
+
+                    <!-- Material Preset -->
+                    <div class="control-group">
+                        <label>Material Finish</label>
+                        <div class="segmented-control four-options">
+                            <input type="radio" id="mat-clay" name="mat-style" value="clay" checked>
+                            <label for="mat-clay">Clay</label>
+                            
+                            <input type="radio" id="mat-metallic" name="mat-style" value="metallic">
+                            <label for="mat-metallic">Chrome</label>
+                            
+                            <input type="radio" id="mat-xray" name="mat-style" value="xray">
+                            <label for="mat-xray">Holo</label>
+                            
+                            <input type="radio" id="mat-textured" name="mat-style" value="textured">
+                            <label for="mat-textured" id="lbl-textured" class="disabled-label" title="Drag in textures (.png, .jpg) to unlock">Textured</label>
+                        </div>
+                    </div>
+
+                    <!-- Advanced Dropdown -->
+                    <details class="advanced-details">
+                        <summary>Advanced Algorithmic Constraints</summary>
+                        <div class="details-content">
+                            <div class="toggle-group">
+                                <div class="toggle-info">
+                                    <span class="toggle-title">Lock Mesh Borders</span>
+                                    <span class="toggle-desc">Prevents boundary vertices from moving (keeps seams watertight)</span>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox" id="lock-borders-chk" checked>
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                            <div class="toggle-group">
+                                <div class="toggle-info">
+                                    <span class="toggle-title">Regularize Shape</span>
+                                    <span class="toggle-desc">Encourages equilateral triangles (slower but cleaner aspect ratio)</span>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox" id="regularize-chk">
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                            <div class="slider-group-small">
+                                <div class="slider-header-small">
+                                    <label for="error-slider">Error Tolerance</label>
+                                    <span id="error-value">1.00 (Max)</span>
+                                </div>
+                                <input type="range" id="error-slider" min="1" max="100" value="100" class="premium-slider-small">
+                                <span class="input-helper">Max distance from original shape (relative to bounding box)</span>
+                            </div>
+                        </div>
+                    </details>
+                </section>
+
+                <!-- Actions Panel -->
+                <div class="actions-container hidden" id="actions-panel">
+                    <button id="download-btn" class="btn btn-primary btn-glow">
+                        <svg class="btn-icon" viewBox="0 0 24 24" width="18" height="18">
+                            <path fill="currentColor" d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/>
+                        </svg>
+                        Export Simplified OBJ
+                    </button>
+                    <button id="reset-btn" class="btn btn-secondary">
+                        Load Different Mesh
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <main class="viewport-container">
+            <div id="canvas-container"></div>
+            
+            <!-- UV Mapping Tool Floating Panel (Right Side) -->
+            <div class="uv-tool-panel hidden" id="uv-tool">
+                <div class="uv-tool-header">
+                    <h3>UV Map Generator</h3>
+                </div>
+                <div class="uv-tool-body">
+                    <div class="uv-control-group">
+                        <label for="uv-mode-select">Projection Type</label>
+                        <select id="uv-mode-select" class="premium-select-box">
+                            <option value="original" selected>Original (Decimated)</option>
+                            <option value="planar-front">Planar (Front)</option>
+                            <option value="planar-top">Planar (Top)</option>
+                            <option value="spherical">Spherical</option>
+                            <option value="cylindrical">Cylindrical</option>
+                        </select>
+                    </div>
+                    
+                    <div class="uv-control-group">
+                        <div class="slider-header-small">
+                            <label for="uv-scale-slider">Texture Scale</label>
+                            <span id="uv-scale-val">1.0x</span>
+                        </div>
+                        <input type="range" id="uv-scale-slider" min="10" max="500" value="100" class="premium-slider-small">
+                    </div>
+                    
+                    <button class="btn btn-secondary btn-small" id="uv-apply-btn">Reset UVs</button>
+                    <button class="btn btn-primary btn-small w-full" id="toggle-uv-editor-btn" style="margin-top: 8px; width: 100%;">Open UV Editor</button>
+                </div>
+            </div>
+            
+            <!-- Viewport HUD Overlay -->
+            <div class="viewport-hud">
+                <div class="hud-item" id="hud-perf">
+                    <span class="hud-label">Simplification:</span>
+                    <span class="hud-val" id="hud-time">0 ms</span>
+                </div>
+                <div class="hud-item" id="hud-fps">
+                    <span class="hud-label">Shading:</span>
+                    <span class="hud-val" id="hud-shading">Smooth</span>
+                </div>
+            </div>
+
+            <!-- Viewport Navigation Controls -->
+            <div class="viewport-controls">
+                <button class="control-btn" id="ctrl-focus" title="Focus Model">⊙</button>
+                <button class="control-btn" id="ctrl-grid" title="Toggle Grid" class="active">⌗</button>
+                <div class="control-divider"></div>
+                <button class="control-btn" id="ctrl-top" title="Top View">T</button>
+                <button class="control-btn" id="ctrl-front" title="Front View">F</button>
+                <button class="control-btn" id="ctrl-side" title="Side View">S</button>
+            </div>
+
+            <!-- Fullscreen Loading Spinner -->
+            <div class="loader-overlay hidden" id="loader">
+                <div class="loader-content">
+                    <div class="hologram-spinner">
+                        <div class="spinner-ring ring-1"></div>
+                        <div class="spinner-ring ring-2"></div>
+                        <div class="spinner-ring ring-3"></div>
+                        <span class="spinner-core">▲</span>
+                    </div>
+                    <h3 id="loader-title">Processing Mesh</h3>
+                    <p id="loader-desc">Please wait while we compute the simplified geometry...</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Collapsible UV Editor Drawer (Right Side) -->
+    <div class="uv-editor-drawer" id="uv-editor-drawer">
+        <div class="drawer-header">
+            <h2>UV Layout Editor</h2>
+            <button class="close-drawer-btn" id="close-uv-drawer-btn">&times;</button>
+        </div>
+        <div class="drawer-body">
+            <div class="canvas-wrapper">
+                <canvas id="uv-canvas" width="380" height="380"></canvas>
+            </div>
+            <div class="hierarchy-panel">
+                <h3>Model Pieces & UV Islands</h3>
+                <div class="hierarchy-tree" id="hierarchy-tree">
+                    <!-- Dynamically populated -->
+                </div>
+            </div>
+            
+            <div class="drawer-controls">
+                <h3>Transform UV Coordinates</h3>
+                
+                <div class="control-group-row">
+                    <div class="control-group-half">
+                        <label for="editor-scale-u">Scale U</label>
+                        <div class="input-with-bubble">
+                            <input type="range" id="editor-scale-u" min="10" max="400" value="100" class="premium-slider-small">
+                            <span class="val-bubble" id="val-scale-u">1.0x</span>
+                        </div>
+                    </div>
+                    <div class="control-group-half">
+                        <label for="editor-scale-v">Scale V</label>
+                        <div class="input-with-bubble">
+                            <input type="range" id="editor-scale-v" min="10" max="400" value="100" class="premium-slider-small">
+                            <span class="val-bubble" id="val-scale-v">1.0x</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="control-group-row">
+                    <div class="control-group-half">
+                        <label for="editor-offset-u">Offset U</label>
+                        <div class="input-with-bubble">
+                            <input type="range" id="editor-offset-u" min="-100" max="100" value="0" class="premium-slider-small">
+                            <span class="val-bubble" id="val-offset-u">0.00</span>
+                        </div>
+                    </div>
+                    <div class="control-group-half">
+                        <label for="editor-offset-v">Offset V</label>
+                        <div class="input-with-bubble">
+                            <input type="range" id="editor-offset-v" min="-100" max="100" value="0" class="premium-slider-small">
+                            <span class="val-bubble" id="val-offset-v">0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label for="editor-rotation">Rotation (Degrees)</label>
+                    <div class="input-with-bubble">
+                        <input type="range" id="editor-rotation" min="-180" max="180" value="0" class="premium-slider-small">
+                        <span class="val-bubble" id="val-rotation">0°</span>
+                    </div>
+                </div>
+
+                <div class="drawer-actions">
+                    <button class="btn btn-secondary btn-small" id="editor-reset-btn">Reset</button>
+                    <button class="btn btn-secondary btn-small" id="editor-flip-v-btn">Flip V Axis</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application Code -->
+    <script type="module" src="app.js"></script>
+</body>
+</html>
